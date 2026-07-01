@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Second Brain — Notes</title>
+<style>
+  :root {
+    --bg: #1e1e22;
+    --bg-2: #25252b;
+    --bg-3: #2d2d35;
+    --bg-hover: #3a3a45;
+    --border: #3a3a44;
+    --text: #e0e0e6;
+    --text-dim: #9a9aa6;
+    --accent: #6c8cff;
+    --accent-2: #ff6c8c;
+    --accent-3: #6cffb0;
+    --danger: #ff5c5c;
+    --folder: #f0c674;
+    --note: #9ec0ff;
+    --graph-node: #6c8cff;
+    --graph-line: #4a4a55;
+    --radius: 6px;
+    --font-ui: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --font-mono: 'Consolas', 'Menlo', 'Monaco', monospace;
+  }
+  [data-theme="light"] {
+    --bg: #f5f5f7;
+    --bg-2: #ffffff;
+    --bg-3: #ececf1;
+    --bg-hover: #e0e0e8;
+    --border: #d5d5de;
+    --text: #1e1e22;
+    --text-dim: #5a5a66;
+    --folder: #c4841d;
+    --note: #2a5db0;
+    --graph-node: #2a5db0;
+    --graph-line: #b0b0c0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; font-family: var(--font-ui); color: var(--text); background: var(--bg); font-size: 14px; }
+  button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+  input, textarea { font-family: inherit; color: inherit; }
+
+  /* Layout */
+  .app { display: grid; grid-template-columns: 260px 1fr; grid-template-rows: 36px 1fr; height: 100vh; }
+  .topbar { grid-column: 1 / -1; display: flex; background: var(--bg-2); border-bottom: 1px solid var(--border); align-items: stretch; user-select: none; overflow-x: auto; }
+  .sidebar { background: var(--bg-2); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+  .main { background: var(--bg); position: relative; overflow: hidden; }
+
+  /* Topbar buttons */
+  .toolbar-left, .toolbar-right { display: flex; align-items: center; padding: 0 8px; gap: 4px; }
+  .toolbar-right { margin-left: auto; }
+  .tbtn { padding: 4px 10px; border-radius: var(--radius); font-size: 12px; color: var(--text-dim); }
+  .tbtn:hover { background: var(--bg-hover); color: var(--text); }
+  .tbtn.active { background: var(--bg-3); color: var(--accent); }
+  .tabs { display: flex; align-items: stretch; flex: 1; overflow-x: auto; }
+  .tab { display: flex; align-items: center; gap: 6px; padding: 0 10px; border-right: 1px solid var(--border); cursor: pointer; font-size: 13px; color: var(--text-dim); white-space: nowrap; min-width: 80px; max-width: 200px; }
+  .tab.active { background: var(--bg); color: var(--text); border-bottom: 2px solid var(--accent); }
+  .tab .ttl { overflow: hidden; text-overflow: ellipsis; }
+  .tab .x { opacity: 0.6; padding: 2px 4px; border-radius: 3px; font-size: 14px; line-height: 1; }
+  .tab .x:hover { background: var(--danger); color: white; opacity: 1; }
+  .tab.graph-tab .ttl { color: var(--accent-3); }
+
+  /* Sidebar */
+  .side-header { padding: 10px 12px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); display: flex; align-items: center; justify-content: space-between; }
+  .side-header .add { color: var(--accent); cursor: pointer; font-size: 18px; line-height: 1; padding: 0 4px; }
+  .tree { flex: 1; padding: 6px 0; overflow-y: auto; }
+  .tree ul { list-style: none; }
+  .tree ul ul { padding-left: 16px; }
+  .node { display: flex; align-items: center; gap: 4px; padding: 3px 8px; cursor: pointer; border-radius: 3px; font-size: 13px; position: relative; }
+  .node:hover { background: var(--bg-hover); }
+  .node.active { background: var(--accent); color: white; }
+  .node.active .cnt { color: white; }
+  .node .caret { width: 12px; text-align: center; color: var(--text-dim); font-size: 10px; flex-shrink: 0; transition: transform 0.1s; }
+  .node.collapsed .caret { transform: rotate(-90deg); }
+  .node .ico { font-size: 12px; flex-shrink: 0; }
+  .node.folder .ico { color: var(--folder); }
+  .node.note .ico { color: var(--note); }
+  .node .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .node.drag-over { background: var(--accent); }
+  .node.dragging { opacity: 0.5; }
+
+  /* Editor */
+  .editor-wrap { position: absolute; inset: 0; display: flex; }
+  .editor-area { flex: 1; position: relative; display: flex; }
+  #editor {
+    width: 100%; height: 100%; border: none; outline: none; resize: none;
+    background: var(--bg); color: var(--text); padding: 24px 40px;
+    font-family: var(--font-mono); font-size: 14px; line-height: 1.6;
+  }
+  #preview {
+    position: absolute; inset: 0; overflow-y: auto; padding: 24px 48px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.65; font-size: 15px;
+  }
+  #preview h1 { font-size: 2em; margin: 0.6em 0 0.4em; border-bottom: 1px solid var(--border); padding-bottom: 0.2em; }
+  #preview h2 { font-size: 1.5em; margin: 0.6em 0 0.4em; }
+  #preview h3 { font-size: 1.2em; margin: 0.6em 0 0.3em; }
+  #preview p { margin: 0.6em 0; }
+  #preview ul, #preview ol { margin: 0.4em 0; padding-left: 2em; }
+  #preview strong { font-weight: 700; color: var(--accent-2); }
+  #preview em { font-style: italic; color: var(--accent-3); }
+  #preview code { background: var(--bg-3); padding: 1px 6px; border-radius: 3px; font-family: var(--font-mono); font-size: 0.9em; }
+  #preview pre { background: var(--bg-3); padding: 12px; border-radius: var(--radius); overflow: auto; margin: 0.6em 0; }
+  #preview pre code { background: none; padding: 0; }
+  #preview blockquote { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--text-dim); margin: 0.6em 0; }
+  #preview a { color: var(--accent); text-decoration: none; }
+  #preview a:hover { text-decoration: underline; }
+  #preview a.broken { color: var(--danger); border-bottom: 1px dashed var(--danger); cursor: pointer; }
+  #preview .tag { color: var(--accent-3); background: var(--bg-3); padding: 0 4px; border-radius: 3px; font-size: 0.9em; cursor: pointer; }
+  #preview hr { border: none; border-top: 1px solid var(--border); margin: 1.2em 0; }
+
+  .mode-source #preview { display: none; }
+  .mode-preview #editor { display: none; }
+  .mode-live #editor { position: absolute; left: 0; top: 0; color: transparent; background: transparent; caret-color: var(--accent); z-index: 2; }
+  .mode-live #preview { pointer-events: none; z-index: 1; }
+  .mode-live.live-editing #editor { color: var(--text); background: var(--bg); }
+  .mode-live.live-editing #preview { opacity: 0.15; }
+
+  .backlinks { width: 240px; border-left: 1px solid var(--border); background: var(--bg-2); padding: 12px; overflow-y: auto; font-size: 12px; }
+  .backlinks h4 { color: var(--text-dim); font-size: 11px; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+  .backlinks .bl { padding: 6px 8px; border-radius: 4px; cursor: pointer; margin-bottom: 3px; color: var(--text); }
+  .backlinks .bl:hover { background: var(--bg-hover); }
+  .backlinks .empty { color: var(--text-dim); font-style: italic; }
+
+  /* Autocomplete */
+  .suggest {
+    position: absolute; z-index: 100; background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,0.4); max-height: 260px; overflow-y: auto;
+    min-width: 200px; padding: 4px 0; font-size: 13px;
+  }
+  .suggest .it { padding: 5px 12px; cursor: pointer; }
+  .suggest .it.sel { background: var(--accent); color: white; }
+  .suggest .it .sub { font-size: 11px; color: var(--text-dim); margin-left: 6px; }
+  .suggest .it.sel .sub { color: white; opacity: 0.8; }
+
+  /* Graph */
+  #graph-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  #graph-canvas:active { cursor: grabbing; }
+  .graph-info { position: absolute; top: 12px; left: 12px; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; font-size: 12px; color: var(--text-dim); pointer-events: none; }
+  .graph-info b { color: var(--accent); }
+  .graph-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; }
+  .graph-controls button { background: var(--bg-2); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius); font-size: 12px; color: var(--text); }
+  .graph-controls button:hover { background: var(--bg-hover); }
+
+  /* Context menu */
+  .ctxmenu { position: fixed; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 0; min-width: 180px; z-index: 1000; box-shadow: 0 6px 20px rgba(0,0,0,0.5); font-size: 13px; }
+  .ctxmenu .it { padding: 6px 14px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
+  .ctxmenu .it:hover { background: var(--accent); color: white; }
+  .ctxmenu .sep { height: 1px; background: var(--border); margin: 4px 0; }
+  .ctxmenu .it.danger { color: var(--danger); }
+  .ctxmenu .it.danger:hover { background: var(--danger); color: white; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 2000; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; min-width: 340px; }
+  .modal h3 { margin-bottom: 14px; font-size: 15px; }
+  .modal input { width: 100%; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 14px; font-size: 13px; }
+  .modal input:focus { outline: none; border-color: var(--accent); }
+  .modal .actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .modal button { padding: 6px 14px; border-radius: 4px; font-size: 13px; }
+  .modal .ok { background: var(--accent); color: white; }
+  .modal .cancel { background: var(--bg-3); }
+  .modal button:hover { filter: brightness(1.1); }
+
+  /* Welcome */
+  .welcome { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; color: var(--text-dim); text-align: center; padding: 40px; }
+  .welcome h1 { font-size: 2em; color: var(--text); font-weight: 300; }
+  .welcome kbd { background: var(--bg-3); border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; font-family: var(--font-mono); font-size: 0.9em; color: var(--text); }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--bg-2); border: 1px solid var(--border); border-left: 3px solid var(--accent); padding: 10px 16px; border-radius: 4px; font-size: 13px; z-index: 3000; opacity: 0; transform: translateY(20px); transition: all 0.2s; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { border-left-color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="toolbar-left">
+      <button class="tbtn" id="btn-new-note" title="Новая заметка (Ctrl+N)">＋ Заметка</button>
+      <button class="tbtn" id="btn-new-folder" title="Новая папка">＋ Папка</button>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div class="toolbar-right">
+      <button class="tbtn" id="btn-mode-source" title="Исходник">Source</button>
+      <button class="tbtn" id="btn-mode-live" title="Живое превью">Live</button>
+      <button class="tbtn" id="btn-mode-preview" title="Превью">Preview</button>
+      <button class="tbtn" id="btn-graph" title="Граф (Ctrl+G)">◉ Граф</button>
+      <button class="tbtn" id="btn-theme" title="Тема">◐</button>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="side-header">
+      <span>Файлы</span>
+      <span class="add" id="btn-add-root" title="Создать в корне">+</span>
+    </div>
+    <div class="tree" id="tree"></div>
+    <div class="side-header" style="border-top:1px solid var(--border); border-bottom:none; padding: 8px 12px; font-size:11px;">
+      <span id="stats"></span>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <div class="editor-wrap" id="editor-wrap" style="display:none;">
+      <div class="editor-area" id="editor-area">
+        <textarea id="editor" spellcheck="false"></textarea>
+        <div id="preview"></div>
+        <div class="suggest" id="suggest" style="display:none;"></div>
+      </div>
+      <div class="backlinks" id="backlinks"></div>
+    </div>
+    <canvas id="graph-canvas" style="display:none;"></canvas>
+    <div class="welcome" id="welcome">
+      <h1>⚡ Second Brain</h1>
+      <p>Создайте первую заметку или откройте существующую из дерева слева.</p>
+      <p style="font-size:12px; margin-top:20px;">
+        <kbd>Ctrl+N</kbd> новая заметка · <kbd>Ctrl+S</kbd> сохранить · <kbd>Ctrl+E</kbd> режим · <kbd>Ctrl+G</kbd> граф
+      </p>
+      <p style="font-size:11px;">Связывайте заметки через <code>[[Имя заметки]]</code></p>
+    </div>
+  </div>
+</div>
+
+<div class="ctxmenu" id="ctxmenu" style="display:none;"></div>
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Создать</h3>
+    <input type="text" id="modal-input" placeholder="Название..." />
+    <div class="actions">
+      <button class="cancel" id="modal-cancel">Отмена</button>
+      <button class="ok" id="modal-ok">ОК</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   Second Brain — Vanilla JS Local Notes
+   Data layer simulates the MySQL schema in localStorage.
+   ========================================================= */
+
+const CONFIG = {
+  save_note: { ctrl: true, key: 's', code: 'S' },
+  toggle_preview: { ctrl: true, key: 'e', code: 'E' },
+  create_note: { ctrl: true, key: 'n', code: 'N' },
+  close_tab: { ctrl: true, key: 'w', code: 'W' },
+  open_graph: { ctrl: true, key: 'g', code: 'G' }
+};
+
+// ---------- Storage (emulates MySQL nodes/links/tabs_session) ----------
+const DB_KEY = 'secondbrain_v1';
+let db = loadDB();
+
+function loadDB() {
+  let raw = localStorage.getItem(DB_KEY);
+  if (raw) { try { return JSON.parse(raw); } catch(e) {} }
+  return seed();
+}
+function seed() {
+  // Seed with a few example notes
+  const now = new Date().toISOString();
+  const nodes = [
+    { id: 1, parent_id: null, title: 'Welcome', content:
+`# Добро пожаловать в Second Brain 🧠
+
+Это ваш **второй мозг** — локальная база знаний в виде связанных заметок.
+
+## Быстрый старт
+
+- Создавайте заметки через **+ Заметка** на панели слева
+- Связывайте их через синтаксис [[Second Brain]] — двойные квадратные скобки
+- Переименование заметки автоматически обновляет все ссылки
+- Откройте [[Граф знаний]] чтобы увидеть связи
+
+## Горячие клавиши
+
+- **Ctrl+N** — новая заметка
+- **Ctrl+S** — сохранить
+- **Ctrl+E** — переключить режим редактор/превью
+- **Ctrl+G** — вид графа
+
+## Подсказки
+
+Попробуйте набрать [[ чтобы увидеть автодополнение.
+Или добавьте #тег чтобы categorize. #пример #добро-пожаловать
+`, is_folder: 0, created_at: now, updated_at: now },
+    { id: 2, parent_id: null, title: 'Second Brain', content:
+`# Second Brain
+
+Методология ведения заметок от Tiago Forte.
+
+Основные принципы:
+1. **Сбор** информации из внешних источников
+2. **Обработка** и выделение главного
+3. **Организация** по [[PARA]] методу
+4. **Рефлексия** — регулярный просмотр
+5. **Синтез** — создание нового знания
+
+См. также: [[Граф знаний]], [[Welcome]]
+`, is_folder: 0, created_at: now, updated_at: now },
+    { id: 3, parent_id: null, title: 'PARA', content:
+`# PARA
+
+PARA — это система организации:
+
+- **Projects** — текущие проекты с дедлайнами
+- **Areas** — сферы ответственности
+- **Resources** — темы, которые могут пригодиться
+- **Archives** — неактивное
+
+Связано с [[Second Brain]].
+`, is_folder: 0, created_at: now, updated_at: now },
+    { id: 4, parent_id: null, title: 'Граф знаний', content:
+`# Граф знаний
+
+Визуализация связей между заметками.
+
+- Каждая точка — заметка
+- Линия — [[wiki-links|wiki-ссылка]] между ними
+- Перетаскивайте узлы мышью
+- Двойной клик — открыть заметку
+
+См. [[Second Brain]]
+`, is_folder: 0, created_at: now, updated_at: now },
+    { id: 5, parent_id: null, title: 'Examples', content: null, is_folder: 1, created_at: now, updated_at: now },
+    { id: 6, parent_id: 5, title: 'Markdown тест', content:
+`# Заголовок H1
+
+## Заголовок H2
+
+Обычный текст с **жирным** и *курсивом*, а также \`кодом\`.
+
+### Список
+
+- пункт один
+- пункт два
+  - вложенный
+- пункт три
+
+> Это цитата. Ссылается на [[Welcome]].
+
+---
+
+## Ссылки
+
+- Внешние не поддерживаются в этом вики-режиме, но wiki-links работают: [[PARA]], [[Second Brain]]
+
+## Код
+
+\`\`\`
+function hello() { return 'world'; }
+\`\`\`
+
+Конец.
+`, is_folder: 0, created_at: now, updated_at: now }
+  ];
+  const links = [];
+  const session = { tabs: [{node_id: 1, position_order: 0, is_active: true}] };
+  const d = { nodes, links, session, nextId: 7 };
+  regenerateLinksForAll(d);
+  saveDB(d);
+  return d;
+}
+function saveDB(d = db) {
+  localStorage.setItem(DB_KEY, JSON.stringify(d));
+}
+function nextId() { return db.nextId++; }
+
+// ---------- Link parser ----------
+const WIKI_RE = /\[\[([^\[\]\n|]+?)(?:\|([^\[\]\n]+?))?\]\]/g;
+const TAG_RE = /(?:^|\s)#([\w\-а-яА-ЯёЁ]+)/g;
+
+function extractWikilinks(content) {
+  const links = [];
+  if (!content) return links;
+  let m;
+  const re = new RegExp(WIKI_RE.source, 'g');
+  while ((m = re.exec(content)) !== null) {
+    links.push({ target_title: m[1].trim(), alias: (m[2] || '').trim() });
+  }
+  return links;
+}
+function extractTags(content) {
+  const tags = new Set();
+  if (!content) return [...tags];
+  let m;
+  const re = new RegExp(TAG_RE.source, 'g');
+  while ((m = re.exec(content)) !== null) tags.add(m[1]);
+  return [...tags];
+}
+function regenerateLinks(node_id) {
+  db.links = db.links.filter(l => l.source_id !== node_id);
+  const node = db.nodes.find(n => n.id === node_id);
+  if (!node || !node.content || node.is_folder) { saveDB(); return; }
+  const wls = extractWikilinks(node.content);
+  for (const w of wls) {
+    const tgt = db.nodes.find(n => !n.is_folder && n.title.toLowerCase() === w.target_title.toLowerCase());
+    if (tgt && tgt.id !== node_id) {
+      // avoid duplicates
+      if (!db.links.find(l => l.source_id === node_id && l.target_id === tgt.id)) {
+        db.links.push({ id: null, source_id: node_id, target_id: tgt.id });
+      }
+    }
+  }
+  saveDB();
+}
+function regenerateLinksForAll(d = db) {
+  d.links = [];
+  for (const n of d.nodes) if (!n.is_folder && n.content) {
+    const wls = extractWikilinks(n.content);
+    for (const w of wls) {
+      const tgt = d.nodes.find(x => !x.is_folder && x.title.toLowerCase() === w.target_title.toLowerCase());
+      if (tgt && tgt.id !== n.id) {
+        if (!d.links.find(l => l.source_id === n.id && l.target_id === tgt.id)) {
+          d.links.push({ id: null, source_id: n.id, target_id: tgt.id });
+        }
+      }
+    }
+  }
+}
+
+// When renaming a note, update all [[old]] -> [[neue]] in other notes
+function renameNoteAndRefs(id, newTitle) {
+  const node = db.nodes.find(n => n.id === id);
+  if (!node || node.is_folder) return;
+  const oldTitle = node.title;
+  if (oldTitle === newTitle) return;
+  node.title = newTitle;
+  node.updated_at = new Date().toISOString();
+  // replace in other notes
+  const re = new RegExp('\\[\\[' + escapeRegex(oldTitle) + '(\\|[^\\[\\]\\n]*?)?\\]\\]', 'g');
+  for (const n of db.nodes) {
+    if (n.id === id || n.is_folder || !n.content) continue;
+    if (n.content.toLowerCase().includes('[[' + oldTitle.toLowerCase() + ']') ||
+        n.content.toLowerCase().includes('[[' + oldTitle.toLowerCase() + '|')) {
+      n.content = n.content.replace(re, (m, alias) => {
+        if (alias) return '[[' + newTitle + alias + ']]';
+        return '[[' + newTitle + ']]';
+      });
+      n.updated_at = new Date().toISOString();
+    }
+  }
+  // regenerate all links (titles may point to new id? Actually id stays same, links are id-based so fine; but do it to be safe)
+  regenerateLinksForAll();
+  saveDB();
+}
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// ---------- Tree helpers ----------
+function getChildren(pid) { return db.nodes.filter(n => n.parent_id === pid).sort((a,b) => (b.is_folder - a.is_folder) || a.title.localeCompare(b.title)); }
+function getDescendants(id, arr = []) {
+  arr.push(id);
+  for (const c of getChildren(id)) getDescendants(c.id, arr);
+  return arr;
+}
+function findNode(id) { return db.nodes.find(n => n.id === id); }
+function titleExistsInFolder(parent_id, title, is_folder, excludeId = null) {
+  return db.nodes.some(n => n.parent_id === parent_id && n.title === title && n.is_folder === is_folder && n.id !== excludeId);
+}
+
+// ---------- UI State ----------
+const state = {
+  openTabs: [],           // array of { node_id, is_active }
+  activeId: null,
+  mode: 'source',         // source | preview | live
+  showGraph: false,
+  expanded: new Set(),    // folder ids expanded
+  currentContent: '',     // unsaved content of active note
+  dirty: false,
+  draggedNodeId: null,
+  contextMenuNodeId: null,
+};
+
+function loadSession() {
+  state.openTabs = [];
+  state.activeId = null;
+  const s = db.session;
+  if (s && Array.isArray(s.tabs)) {
+    for (const t of s.tabs) {
+      if (findNode(t.node_id)) {
+        state.openTabs.push({ node_id: t.node_id, is_active: !!t.is_active });
+        if (t.is_active) state.activeId = t.node_id;
+      }
+    }
+  }
+}
+function saveSession() {
+  db.session.tabs = state.openTabs
+    .map((t, i) => ({ node_id: t.node_id, position_order: i, is_active: t.node_id === state.activeId }));
+  saveDB();
+}
+
+// ---------- Tree rendering ----------
+const treeEl = document.getElementById('tree');
+function renderTree() {
+  treeEl.innerHTML = '';
+  const ul = document.createElement('ul');
+  buildTreeLevel(null, ul);
+  treeEl.appendChild(ul);
+  updateStats();
+}
+function buildTreeLevel(pid, parentUl) {
+  const ch = getChildren(pid);
+  for (const node of ch) {
+    const li = document.createElement('li');
+    const div = document.createElement('div');
+    div.className = 'node ' + (node.is_folder ? 'folder' : 'note');
+    if (node.is_folder && state.expanded.has(node.id)) div.classList.add('expanded');
+    else if (node.is_folder) div.classList.add('collapsed');
+    if (node.id === state.activeId && !state.showGraph) div.classList.add('active');
+    div.dataset.id = node.id;
+    div.draggable = true;
+
+    const caret = document.createElement('span');
+    caret.className = 'caret';
+    caret.textContent = '▾';
+    const ico = document.createElement('span');
+    ico.className = 'ico';
+    ico.textContent = node.is_folder ? '📁' : '📄';
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = node.title;
+
+    div.appendChild(caret);
+    div.appendChild(ico);
+    div.appendChild(nm);
+    li.appendChild(div);
+
+    if (node.is_folder) {
+      const childUl = document.createElement('ul');
+      if (state.expanded.has(node.id)) {
+        buildTreeLevel(node.id, childUl);
+      }
+      li.appendChild(childUl);
+    }
+    parentUl.appendChild(li);
+
+    // events
+    div.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (node.is_folder) {
+        if (state.expanded.has(node.id)) state.expanded.delete(node.id);
+        else state.expanded.add(node.id);
+        renderTree();
+      } else {
+        openNote(node.id);
+      }
+    });
+    div.addEventListener('contextmenu', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      state.contextMenuNodeId = node.id;
+      if (node.is_folder && !state.expanded.has(node.id)) state.expanded.add(node.id);
+      showContextMenu(e.clientX, e.clientY, node);
+    });
+    div.addEventListener('dragstart', (e) => {
+      state.draggedNodeId = node.id;
+      div.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', String(node.id)); } catch(_) {}
+    });
+    div.addEventListener('dragend', () => {
+      div.classList.remove('dragging');
+      state.draggedNodeId = null;
+      document.querySelectorAll('.node.drag-over').forEach(n => n.classList.remove('drag-over'));
+    });
+    div.addEventListener('dragover', (e) => {
+      if (state.draggedNodeId == null || state.draggedNodeId === node.id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Can drop into folders only; for notes we also allow dropping on same parent? We'll allow dropping onto folder
+      // Do not allow dropping a folder into its own descendant
+      if (node.is_folder) {
+        const descs = getDescendants(state.draggedNodeId);
+        if (descs.includes(node.id)) return;
+      }
+      div.classList.add('drag-over');
+    });
+    div.addEventListener('dragleave', () => {
+      div.classList.remove('drag-over');
+    });
+    div.addEventListener('drop', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      div.classList.remove('drag-over');
+      const did = state.draggedNodeId;
+      if (!did || did === node.id) return;
+      const dragged = findNode(did);
+      if (!dragged) return;
+      // If dropped onto folder: move into that folder. If dropped onto a note or root: move to same parent as target? We'll put it in target's parent.
+      let newParent;
+      if (node.is_folder) {
+        // prevent cycle
+        const descs = getDescendants(did);
+        if (descs.includes(node.id)) { toast('Нельзя переместить: вложенная папка', true); return; }
+        newParent = node.id;
+      } else {
+        newParent = node.parent_id;
+      }
+      if (titleExistsInFolder(newParent, dragged.title, dragged.is_folder, did)) {
+        toast('Элемент с таким именем уже существует в папке', true); return;
+      }
+      dragged.parent_id = newParent;
+      dragged.updated_at = new Date().toISOString();
+      saveDB();
+      if (node.is_folder) state.expanded.add(node.id);
+      renderTree();
+    });
+  }
+}
+
+function updateStats() {
+  const notes = db.nodes.filter(n => !n.is_folder).length;
+  const folders = db.nodes.filter(n => n.is_folder).length;
+  const links = db.links.length;
+  document.getElementById('stats').textContent = `${notes} заметок · ${folders} папок · ${links} связей`;
+}
+
+// ---------- Tabs ----------
+const tabsEl = document.getElementById('tabs');
+function renderTabs() {
+  tabsEl.innerHTML = '';
+  for (const t of state.openTabs) {
+    const node = findNode(t.node_id);
+    if (!node) continue;
+    const div = document.createElement('div');
+    div.className = 'tab';
+    if (t.node_id === state.activeId && !state.showGraph) div.classList.add('active');
+    const ttl = document.createElement('span');
+    ttl.className = 'ttl';
+    ttl.textContent = node.title;
+    const x = document.createElement('span');
+    x.className = 'x';
+    x.textContent = '×';
+    x.title = 'Закрыть (Ctrl+W)';
+    div.appendChild(ttl); div.appendChild(x);
+    div.addEventListener('click', (e) => {
+      if (e.target === x) { closeTab(t.node_id); }
+      else { state.showGraph = false; activateTab(t.node_id); }
+    });
+    tabsEl.appendChild(div);
+  }
+}
+function openNote(id) {
+  if (!findNode(id)) return;
+  state.showGraph = false;
+  if (!state.openTabs.find(t => t.node_id === id)) {
+    state.openTabs.push({ node_id: id });
+  }
+  activateTab(id);
+}
+function activateTab(id) {
+  // save current first
+  if (state.activeId && state.dirty) {
+    writeActiveToNode();
+  }
+  state.activeId = id;
+  loadActiveToEditor();
+  renderTabs();
+  renderTree();
+  renderEditor();
+  renderBacklinks();
+  saveSession();
+}
+function closeTab(id) {
+  if (state.activeId === id && state.dirty) writeActiveToNode();
+  state.openTabs = state.openTabs.filter(t => t.node_id !== id);
+  if (state.activeId === id) {
+    const last = state.openTabs[state.openTabs.length - 1];
+    state.activeId = last ? last.node_id : null;
+  }
+  renderTabs(); renderTree(); renderEditor(); renderBacklinks();
+  saveSession();
+}
+function writeActiveToNode() {
+  if (state.activeId == null) return;
+  const node = findNode(state.activeId);
+  if (!node) return;
+  const txt = editorEl.value;
+  if (node.content !== txt) {
+    node.content = txt;
+    node.updated_at = new Date().toISOString();
+    regenerateLinks(state.activeId);
+  }
+  state.dirty = false;
+  saveDB();
+}
+function loadActiveToEditor() {
+  if (state.activeId == null) { state.currentContent = ''; editorEl.value = ''; return; }
+  const n = findNode(state.activeId);
+  state.currentContent = n.content || '';
+  editorEl.value = state.currentContent;
+  state.dirty = false;
+}
+
+// ---------- Editor / Preview ----------
+const editorWrap = document.getElementById('editor-wrap');
+const editorEl = document.getElementById('editor');
+const previewEl = document.getElementById('preview');
+const welcomeEl = document.getElementById('welcome');
+const graphCanvas = document.getElementById('graph-canvas');
+const backlinksEl = document.getElementById('backlinks');
+
+function renderEditor() {
+  if (state.showGraph) {
+    editorWrap.style.display = 'none';
+    welcomeEl.style.display = 'none';
+    graphCanvas.style.display = 'block';
+    backlinksEl.style.display = 'none';
+    startGraph();
+    return;
+  } else {
+    graphCanvas.style.display = 'none';
+    stopGraph();
+  }
+  if (state.activeId == null) {
+    editorWrap.style.display = 'none';
+    welcomeEl.style.display = 'flex';
+    return;
+  }
+  editorWrap.style.display = 'flex';
+  welcomeEl.style.display = 'none';
+  editorWrap.parentElement.classList.remove('mode-source','mode-preview','mode-live');
+  editorWrap.parentElement.classList.add('mode-' + state.mode);
+  if (state.mode === 'preview' || state.mode === 'live') {
+    previewEl.innerHTML = renderMarkdown(editorEl.value);
+    wirePreviewLinks();
+  }
+}
+function renderBacklinks() {
+  backlinksEl.innerHTML = '<h4>Обратные ссылки</h4>';
+  if (state.activeId == null || state.showGraph) { backlinksEl.style.display = 'none'; return; }
+  backlinksEl.style.display = '';
+  const bls = db.links.filter(l => l.target_id === state.activeId);
+  if (bls.length === 0) {
+    const e = document.createElement('div'); e.className = 'empty'; e.textContent = 'Нет ссылок';
+    backlinksEl.appendChild(e);
+    return;
+  }
+  for (const l of bls) {
+    const src = findNode(l.source_id); if (!src) continue;
+    const d = document.createElement('div');
+    d.className = 'bl'; d.textContent = '↩ ' + src.title;
+    d.addEventListener('click', () => openNote(src.id));
+    backlinksEl.appendChild(d);
+  }
+}
+
+// ---------- Markdown render (lightweight) ----------
+function renderMarkdown(src) {
+  if (!src) return '';
+  const lines = src.split('\n');
+  // We'll process lines with a simple state machine for code blocks
+  let out = '';
+  let inCode = false;
+  let codeBuf = [];
+  let listType = null;
+  let paraBuf = [];
+
+  const flushPara = () => {
+    if (paraBuf.length) {
+      out += '<p>' + inline(paraBuf.join(' ')) + '</p>';
+      paraBuf = [];
+    }
+  };
+  const closeList = () => {
+    if (listType) { out += '</' + listType + '>'; listType = null; }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    let ln = lines[i];
+    if (inCode) {
+      if (ln.trimStart().startsWith('```')) {
+        out += '<pre><code>' + escapeHtml(codeBuf.join('\n')) + '</code></pre>';
+        codeBuf = []; inCode = false;
+      } else codeBuf.push(ln);
+      continue;
+    }
+    if (ln.trimStart().startsWith('```')) {
+      flushPara(); closeList(); inCode = true; continue;
+    }
+    // heading
+    const h = ln.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { flushPara(); closeList(); out += '<h' + h[1].length + '>' + inline(h[2]) + '</h' + h[1].length + '>'; continue; }
+    // hr
+    if (/^\s*---+\s*$/.test(ln)) { flushPara(); closeList(); out += '<hr/>'; continue; }
+    // blockquote
+    if (/^\s*>\s?/.test(ln)) {
+      flushPara(); closeList();
+      const buf = [ln.replace(/^\s*>\s?/, '')];
+      while (i+1 < lines.length && /^\s*>/.test(lines[i+1])) {
+        i++; buf.push(lines[i].replace(/^\s*>\s?/, ''));
+      }
+      out += '<blockquote>' + inline(buf.join(' ')) + '</blockquote>';
+      continue;
+    }
+    // unordered list
+    const ulm = ln.match(/^(\s*)[-*+]\s+(.*)$/);
+    if (ulm) {
+      flushPara();
+      if (listType !== 'ul') { closeList(); out += '<ul>'; listType = 'ul'; }
+      out += '<li>' + inline(ulm[2]) + '</li>';
+      continue;
+    }
+    // ordered list
+    const olm = ln.match(/^(\s*)\d+\.\s+(.*)$/);
+    if (olm) {
+      flushPara();
+      if (listType !== 'ol') { closeList(); out += '<ol>'; listType = 'ol'; }
+      out += '<li>' + inline(olm[2]) + '</li>';
+      continue;
+    }
+    // blank
+    if (ln.trim() === '') { flushPara(); closeList(); continue; }
+    // accumulate paragraph
+    paraBuf.push(ln);
+  }
+  flushPara(); closeList();
+  if (inCode) out += '<pre><code>' + escapeHtml(codeBuf.join('\n')) + '</code></pre>';
+  return out;
+}
+function inline(s) {
+  s = escapeHtml(s);
+  // images/links left minimal
+  // inline code
+  s = s.replace(/`([^`]+?)`/g, '<code>$1</code>');
+  // bold then italic
+  s = s.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*([^*]+?)\*/g, '<em>$1</em>');
+  // wiki links [[target|alias]] and [[target]]
+  s = s.replace(/\[\[([^\[\]|]+?)(?:\|([^\[\]]+?))?\]\]/g, (m, tgt, alias) => {
+    tgt = tgt.trim(); alias = (alias || '').trim();
+    const found = db.nodes.find(n => !n.is_folder && n.title.toLowerCase() === tgt.toLowerCase());
+    const label = alias || tgt;
+    if (found) {
+      return '<a href="#" class="wiki" data-id="' + found.id + '">' + label + '</a>';
+    }
+    return '<a href="#" class="wiki broken" data-title="' + escapeAttr(tgt) + '">' + label + ' ⚠</a>';
+  });
+  // tags
+  s = s.replace(/(^|\s)(#)([\w\-а-яА-ЯёЁ]+)/g, '$1<span class="tag">#$3</span>');
+  return s;
+}
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
+
+function wirePreviewLinks() {
+  previewEl.querySelectorAll('a.wiki').forEach(a => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = a.dataset.id;
+      if (id) { openNote(parseInt(id, 10)); return; }
+      // broken link: offer to create
+      const t = a.dataset.title;
+      if (t && confirm('Заметка "' + t + '" не найдена. Создать?')) {
+        createNote(null, t);
+      }
+    });
+  });
+}
+
+// ---------- Editor events ----------
+editorEl.addEventListener('input', () => {
+  state.dirty = true;
+  if (state.mode === 'live' || state.mode === 'preview') {
+    previewEl.innerHTML = renderMarkdown(editorEl.value);
+    wirePreviewLinks();
+  }
+  handleSuggest();
+});
+editorEl.addEventListener('keydown', (e) => {
+  if (suggestOpen) {
+    if (suggestHandleKey(e)) return;
+  }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = editorEl.selectionStart, en = editorEl.selectionEnd;
+    editorEl.value = editorEl.value.slice(0, s) + '  ' + editorEl.value.slice(en);
+    editorEl.selectionStart = editorEl.selectionEnd = s + 2;
+    state.dirty = true;
+  }
+});
+// live preview focus handling
+editorEl.addEventListener('focus', () => {
+  if (state.mode === 'live') editorWrap.parentElement.classList.add('live-editing');
+});
+editorEl.addEventListener('blur', () => {
+  if (state.mode === 'live') {
+    previewEl.innerHTML = renderMarkdown(editorEl.value);
+    wirePreviewLinks();
+    editorWrap.parentElement.classList.remove('live-editing');
+  }
+});
+
+// Save on blur too
+editorEl.addEventListener('blur', () => { if (state.dirty && state.activeId != null) writeActiveToNode(); });
+
+// ---------- Autocomplete ----------
+const suggestEl = document.getElementById('suggest');
+let suggestOpen = false;
+let suggestContext = null; // { type: 'wiki'|'tag', startIndex, query, items }
+
+function closeSuggest() { suggestOpen = false; suggestContext = null; suggestEl.style.display = 'none'; }
+function handleSuggest() {
+  if (state.mode === 'preview') { closeSuggest(); return; }
+  const pos = editorEl.selectionStart;
+  const before = editorEl.value.slice(0, pos);
+  // check for [[...]]
+  const wikiMatch = before.match(/\[\[([^\[\]\n]*)$/);
+  if (wikiMatch) {
+    const q = wikiMatch[1];
+    const start = pos - q.length;
+    const all = db.nodes.filter(n => !n.is_folder).map(n => n.title);
+    const items = all.filter(t => t.toLowerCase().includes(q.toLowerCase())).slice(0, 50);
+    openSuggest('wiki', start, q, items);
+    return;
+  }
+  // check for #tag
+  const tagMatch = before.match(/(?:^|\s)#([\w\-а-яА-ЯёЁ]*)$/);
+  if (tagMatch) {
+    const q = tagMatch[1];
+    const start = pos - q.length;
+    const allTags = new Set();
+    for (const n of db.nodes) if (!n.is_folder && n.content) for (const t of extractTags(n.content)) allTags.add(t);
+    const items = [...allTags].filter(t => t.toLowerCase().includes(q.toLowerCase())).slice(0, 40);
+    openSuggest('tag', start, q, items);
+    return;
+  }
+  closeSuggest();
+}
+function openSuggest(type, start, q, items) {
+  suggestContext = { type, start, q, items, sel: 0 };
+  if (items.length === 0 && type === 'wiki') {
+    // still show option to create
+  }
+  renderSuggest();
+  suggestOpen = true;
+  positionSuggest();
+}
+function positionSuggest() {
+  const area = document.getElementById('editor-area');
+  const rect = area.getBoundingClientRect();
+  // we need to get pixel coords of caret in textarea
+  const coords = getCaretCoordinates(editorEl, editorEl.selectionStart);
+  suggestEl.style.left = (rect.left + coords.left) + 'px';
+  suggestEl.style.top = (rect.top + coords.top + 18) + 'px';
+  suggestEl.style.display = 'block';
+}
+function renderSuggest() {
+  suggestEl.innerHTML = '';
+  if (suggestContext.items.length === 0) {
+    if (suggestContext.type === 'wiki' && suggestContext.q.length > 0) {
+      const div = document.createElement('div');
+      div.className = 'it';
+      div.innerHTML = 'Создать: <b>' + escapeHtml(suggestContext.q) + '</b>';
+      div.addEventListener('mousedown', (e) => { e.preventDefault(); createFromSuggest(); });
+      suggestEl.appendChild(div);
+    } else {
+      const div = document.createElement('div'); div.className = 'it'; div.style.color = 'var(--text-dim)'; div.textContent = 'Нет совпадений'; suggestEl.appendChild(div);
+    }
+    return;
+  }
+  suggestContext.items.forEach((t, i) => {
+    const div = document.createElement('div');
+    div.className = 'it' + (i === suggestContext.sel ? ' sel' : '');
+    const nm = document.createElement('span');
+    nm.textContent = t;
+    div.appendChild(nm);
+    div.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      suggestContext.sel = i;
+      commitSuggest();
+    });
+    div.addEventListener('mouseenter', () => { suggestContext.sel = i; renderSuggest(); });
+    suggestEl.appendChild(div);
+  });
+}
+function suggestHandleKey(e) {
+  if (!suggestContext) return false;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    suggestContext.sel = Math.min((suggestContext.items.length || 1) - 1, suggestContext.sel + 1);
+    if (suggestContext.items.length === 0) suggestContext.sel = 0;
+    renderSuggest(); return true;
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    suggestContext.sel = Math.max(0, suggestContext.sel - 1);
+    renderSuggest(); return true;
+  }
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    commitSuggest(); return true;
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault(); closeSuggest(); return true;
+  }
+  return false;
+}
+function commitSuggest() {
+  if (!suggestContext) return;
+  if (suggestContext.items.length === 0 && suggestContext.type === 'wiki') {
+    createFromSuggest(); return;
+  }
+  const chosen = suggestContext.items[suggestContext.sel];
+  if (!chosen) { closeSuggest(); return; }
+  const pos = editorEl.selectionStart;
+  const val = editorEl.value;
+  if (suggestContext.type === 'wiki') {
+    const before = val.slice(0, suggestContext.start - 2);
+    const after = val.slice(pos);
+    editorEl.value = before + '[[' + chosen + ']]' + after;
+    const np = before.length + chosen.length + 4;
+    editorEl.selectionStart = editorEl.selectionEnd = np;
+  } else {
+    const before = val.slice(0, suggestContext.start - 1);
+    const after = val.slice(pos);
+    editorEl.value = before + chosen + after;
+    const np = before.length + chosen.length;
+    editorEl.selectionStart = editorEl.selectionEnd = np;
+  }
+  state.dirty = true;
+  if (state.mode !== 'source') {
+    previewEl.innerHTML = renderMarkdown(editorEl.value);
+    wirePreviewLinks();
+  }
+  closeSuggest();
+}
+function createFromSuggest() {
+  const title = suggestContext.q.trim();
+  if (!title) { closeSuggest(); return; }
+  const pos = editorEl.selectionStart;
+  const val = editorEl.value;
+  const before = val.slice(0, suggestContext.start - 2);
+  const after = val.slice(pos);
+  editorEl.value = before + '[[' + title + ']]' + after;
+  const np = before.length + title.length + 4;
+  closeSuggest();
+  state.dirty = true;
+  if (state.activeId) writeActiveToNode();
+  const id = createNote(null, title, false);
+  if (id >= 0) {
+    editorEl.selectionStart = editorEl.selectionEnd = np;
+    if (state.mode !== 'source') {
+      previewEl.innerHTML = renderMarkdown(editorEl.value);
+      wirePreviewLinks();
+    }
+  }
+}
+
+// Caret coordinates in textarea (mirror div technique)
+const mirrorDiv = document.createElement('div');
+(function initMirror() {
+  const cs = window.getComputedStyle(editorEl);
+  const props = ['fontFamily','fontSize','fontWeight','fontStyle','letterSpacing','lineHeight','padding','paddingTop','paddingRight','paddingBottom','paddingLeft','border','borderTop','borderRight','borderBottom','borderLeft','boxSizing','tabSize','MozTabSize','whiteSpace','wordWrap','wordBreak'];
+  for (const p of props) mirrorDiv.style[p] = cs[p];
+  mirrorDiv.style.position = 'absolute';
+  mirrorDiv.style.visibility = 'hidden';
+  mirrorDiv.style.whiteSpace = 'pre-wrap';
+  mirrorDiv.style.wordWrap = 'break-word';
+  mirrorDiv.style.overflow = 'hidden';
+  mirrorDiv.style.top = '0'; mirrorDiv.style.left = '-9999px';
+  document.body.appendChild(mirrorDiv);
+})();
+function getCaretCoordinates(textarea, position) {
+  const rect = textarea.getBoundingClientRect();
+  mirrorDiv.style.width = (textarea.offsetWidth) + 'px';
+  const before = textarea.value.slice(0, position);
+  const after = textarea.value.slice(position);
+  mirrorDiv.textContent = before;
+  const span = document.createElement('span');
+  span.textContent = after || '.';
+  mirrorDiv.appendChild(span);
+  const coords = { top: span.offsetTop - textarea.scrollTop, left: span.offsetLeft - textarea.scrollLeft };
+  mirrorDiv.textContent = '';
+  return coords;
+}
+
+// ---------- Node CRUD ----------
+function createNode(parent_id, title, is_folder) {
+  if (titleExistsInFolder(parent_id, title, is_folder ? 1 : 0)) {
+    toast((is_folder ? 'Папка' : 'Заметка') + ' с таким именем уже существует', true);
+    return -1;
+  }
+  const id = nextId();
+  const now = new Date().toISOString();
+  const node = {
+    id, parent_id, title,
+    content: is_folder ? null : '',
+    is_folder: is_folder ? 1 : 0,
+    created_at: now, updated_at: now
+  };
+  db.nodes.push(node);
+  saveDB();
+  return id;
+}
+function createNote(parent_id, title, openIt = true) {
+  if (!title || !title.trim()) {
+    promptModal('Новая заметка', 'Название заметки...', (val) => {
+      if (val == null) return;
+      const id = createNode(parent_id, val.trim(), false);
+      if (id >= 0) { renderTree(); if (openIt) openNote(id); }
+    });
+    return;
+  }
+  const id = createNode(parent_id, title, false);
+  if (id >= 0) { renderTree(); if (openIt) openNote(id); regenerateLinksForAll(); saveDB(); updateStats(); }
+  return id;
+}
+function createFolder(parent_id) {
+  promptModal('Новая папка', 'Название папки...', (val) => {
+    if (val == null) return;
+    const id = createNode(parent_id, val.trim(), true);
+    if (id >= 0) { if (parent_id) state.expanded.add(parent_id); renderTree(); }
+  });
+}
+function deleteNode(id) {
+  const node = findNode(id);
+  if (!node) return;
+  const desc = getDescendants(id);
+  const q = node.is_folder
+    ? 'Удалить папку "' + node.title + '" и всё её содержимое (' + (desc.length - 1) + ' элементов)?'
+    : 'Удалить заметку "' + node.title + '"?';
+  if (!confirm(q)) return;
+  db.nodes = db.nodes.filter(n => !desc.includes(n.id));
+  db.links = db.links.filter(l => !desc.includes(l.source_id) && !desc.includes(l.target_id));
+  state.openTabs = state.openTabs.filter(t => !desc.includes(t.node_id));
+  for (const nid of desc) state.expanded.delete(nid);
+  if (desc.includes(state.activeId)) {
+    const last = state.openTabs[state.openTabs.length - 1];
+    state.activeId = last ? last.node_id : null;
+  }
+  saveDB();
+  renderTree(); renderTabs(); renderEditor(); renderBacklinks();
+  saveSession();
+  toast('Удалено');
+}
+function renameNode(id) {
+  const node = findNode(id); if (!node) return;
+  promptModal('Переименовать', 'Новое имя...', (val) => {
+    if (val == null) return;
+    val = val.trim(); if (!val || val === node.title) return;
+    if (titleExistsInFolder(node.parent_id, val, node.is_folder, id)) {
+      toast('Имя уже занято', true); return;
+    }
+    const activeChanged = (state.activeId === id);
+    if (node.is_folder) {
+      node.title = val;
+    } else {
+      renameNoteAndRefs(id, val);
+    }
+    saveDB();
+    renderTree(); renderTabs(); renderEditor();
+    if (activeChanged) renderBacklinks();
+    saveSession();
+  }, node.title);
+}
+
+// ---------- Context menu ----------
+const ctxmenuEl = document.getElementById('ctxmenu');
+function showContextMenu(x, y, node) {
+  ctxmenuEl.innerHTML = '';
+  const items = [];
+  if (node.is_folder) {
+    items.push({ label: '＋ Новая заметка', action: () => createNote(node.id) });
+    items.push({ label: '＋ Новая папка', action: () => createFolder(node.id) });
+    items.push({ sep: true });
+  }
+  items.push({ label: '✎ Переименовать', action: () => renameNode(node.id) });
+  if (node.is_folder) {
+    items.push({ label: '↻ Развернуть', action: () => { state.expanded.add(node.id); renderTree(); } });
+  }
+  items.push({ sep: true });
+  items.push({ label: '🗑 Удалить', action: () => deleteNode(node.id), danger: true });
+
+  for (const it of items) {
+    if (it.sep) { const s = document.createElement('div'); s.className = 'sep'; ctxmenuEl.appendChild(s); continue; }
+    const d = document.createElement('div');
+    d.className = 'it' + (it.danger ? ' danger' : '');
+    d.textContent = it.label;
+    d.addEventListener('click', () => { hideContextMenu(); it.action(); });
+    ctxmenuEl.appendChild(d);
+  }
+  ctxmenuEl.style.left = Math.min(x, window.innerWidth - 220) + 'px';
+  ctxmenuEl.style.top = Math.min(y, window.innerHeight - 200) + 'px';
+  ctxmenuEl.style.display = 'block';
+}
+function hideContextMenu() { ctxmenuEl.style.display = 'none'; state.contextMenuNodeId = null; }
+document.addEventListener('click', hideContextMenu);
+document.addEventListener('scroll', hideContextMenu, true);
+
+// ---------- Modal ----------
+const modalEl = document.getElementById('modal');
+const modalInput = document.getElementById('modal-input');
+const modalTitle = document.getElementById('modal-title');
+let modalCallback = null;
+function promptModal(title, placeholder, cb, initial = '') {
+  modalTitle.textContent = title;
+  modalInput.placeholder = placeholder;
+  modalInput.value = initial;
+  modalCallback = cb;
+  modalEl.classList.add('show');
+  setTimeout(() => modalInput.focus(), 50);
+}
+document.getElementById('modal-cancel').addEventListener('click', () => closeModal(null));
+document.getElementById('modal-ok').addEventListener('click', () => closeModal(modalInput.value));
+modalInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') closeModal(modalInput.value); if (e.key === 'Escape') closeModal(null); });
+function closeModal(v) {
+  modalEl.classList.remove('show');
+  if (modalCallback) modalCallback(v);
+  modalCallback = null;
+}
+
+// ---------- Toast ----------
+const toastEl = document.getElementById('toast');
+let toastTimer;
+function toast(msg, isError = false) {
+  toastEl.textContent = msg;
+  toastEl.classList.toggle('error', !!isError);
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+}
+
+// ---------- Toolbar buttons ----------
+document.getElementById('btn-new-note').addEventListener('click', () => {
+  // create in root, or in the currently active note's parent folder? Use root.
+  createNote(null);
+});
+document.getElementById('btn-new-folder').addEventListener('click', () => createFolder(null));
+document.getElementById('btn-add-root').addEventListener('click', (e) => {
+  e.stopPropagation();
+  // Simple: let user choose via a prompt what to create? We'll show a small pop-up. For brevity create note.
+  const choice = confirm('ОК — новая заметка, Отмена — новая папка');
+  if (choice) createNote(null); else createFolder(null);
+});
+function setMode(mode) {
+  state.mode = mode;
+  document.getElementById('btn-mode-source').classList.toggle('active', mode === 'source');
+  document.getElementById('btn-mode-live').classList.toggle('active', mode === 'live');
+  document.getElementById('btn-mode-preview').classList.toggle('active', mode === 'preview');
+  renderEditor();
+}
+document.getElementById('btn-mode-source').addEventListener('click', () => setMode('source'));
+document.getElementById('btn-mode-live').addEventListener('click', () => setMode('live'));
+document.getElementById('btn-mode-preview').addEventListener('click', () => setMode('preview'));
+document.getElementById('btn-graph').addEventListener('click', toggleGraph);
+document.getElementById('btn-theme').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  const nxt = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', nxt);
+  localStorage.setItem('sb_theme', nxt);
+});
+const savedTheme = localStorage.getItem('sb_theme');
+if (savedTheme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+else document.documentElement.setAttribute('data-theme', 'dark');
+
+function toggleGraph() {
+  if (state.dirty && state.activeId != null) writeActiveToNode();
+  state.showGraph = !state.showGraph;
+  document.getElementById('btn-graph').classList.toggle('active', state.showGraph);
+  renderTabs(); renderTree(); renderEditor();
+}
+
+// ---------- Hotkeys ----------
+document.addEventListener('keydown', (e) => {
+  // Don't trigger when modal open
+  if (modalEl.classList.contains('show')) return;
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && !e.shiftKey && !e.altKey) {
+    const k = e.key.toLowerCase();
+    if (k === 's') { e.preventDefault(); if (state.activeId != null && state.dirty) { writeActiveToNode(); toast('Сохранено'); renderBacklinks(); updateStats(); } }
+    else if (k === 'n') { e.preventDefault(); createNote(null); }
+    else if (k === 'w') { e.preventDefault(); if (state.activeId != null) closeTab(state.activeId); }
+    else if (k === 'e') { e.preventDefault(); setMode(state.mode === 'source' ? 'preview' : (state.mode === 'preview' ? 'live' : 'source')); }
+    else if (k === 'g') { e.preventDefault(); toggleGraph(); }
+  }
+});
+
+// ---------- Save on close ----------
+window.addEventListener('beforeunload', () => {
+  if (state.dirty && state.activeId != null) writeActiveToNode();
+  saveSession();
+});
+
+// Auto-save every 3 seconds when dirty
+setInterval(() => {
+  if (state.dirty && state.activeId != null) {
+    writeActiveToNode();
+    renderBacklinks();
+    updateStats();
+  }
+}, 3000);
+
+/* =========================================================
+   Graph View — Force Directed Canvas
+   ========================================================= */
+let graphAnimId = null;
+let graphNodes = []; // {id, title, x, y, vx, vy, radius}
+let graphLinks = []; // {source, target}
+let graphTransform = { x: 0, y: 0, scale: 1 };
+let graphDrag = null;
+let graphHover = null;
+let graphPan = null;
+let graphMouse = { x: 0, y: 0 };
+let graphCanvasRect = null;
+
+function buildGraphData() {
+  const map = new Map();
+  for (const n of db.nodes) if (!n.is_folder) {
+    map.set(n.id, {
+      id: n.id, title: n.title,
+      x: (Math.random() - 0.5) * 200,
+      y: (Math.random() - 0.5) * 200,
+      vx: 0, vy: 0,
+      radius: 7 + Math.min(10, db.links.filter(l => l.source_id === n.id || l.target_id === n.id).length)
+    });
+  }
+  graphNodes = [...map.values()];
+  graphLinks = [];
+  const seen = new Set();
+  for (const l of db.links) {
+    if (map.has(l.source_id) && map.has(l.target_id)) {
+      const key = [Math.min(l.source_id, l.target_id), Math.max(l.source_id, l.target_id)].join('-');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      graphLinks.push({ source: map.get(l.source_id), target: map.get(l.target_id) });
+    }
+  }
+}
+function startGraph() {
+  stopGraph();
+  buildGraphData();
+  resizeGraph();
+  graphTransform = { x: graphCanvas.width / 2, y: graphCanvas.height / 2, scale: 1 };
+  loopGraph();
+}
+function stopGraph() {
+  if (graphAnimId) cancelAnimationFrame(graphAnimId);
+  graphAnimId = null;
+}
+function resizeGraph() {
+  const rect = graphCanvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  graphCanvas.width = rect.width * dpr;
+  graphCanvas.height = rect.height * dpr;
+  graphCanvas.style.width = rect.width + 'px';
+  graphCanvas.style.height = rect.height + 'px';
+  const ctx = graphCanvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  graphCanvasRect = rect;
+}
+window.addEventListener('resize', () => { if (state.showGraph) resizeGraph(); });
+
+function screenToWorld(sx, sy) {
+  return {
+    x: (sx - graphTransform.x) / graphTransform.scale,
+    y: (sy - graphTransform.y) / graphTransform.scale
+  };
+}
+
+function tickGraph() {
+  const REPULSE = 800;
+  const ATTRACT = 0.008;
+  const REST = 80;
+  const DAMP = 0.82;
+  const CENTER_GRAV = 0.006;
+
+  // repulse
+  for (let i = 0; i < graphNodes.length; i++) {
+    for (let j = i + 1; j < graphNodes.length; j++) {
+      const a = graphNodes[i], b = graphNodes[j];
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let d2 = dx*dx + dy*dy;
+      if (d2 < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = dx*dx + dy*dy; }
+      const d = Math.sqrt(d2);
+      const f = REPULSE / d2;
+      const fx = (dx / d) * f;
+      const fy = (dy / d) * f;
+      a.vx += fx; a.vy += fy;
+      b.vx -= fx; b.vy -= fy;
+    }
+  }
+  // attract
+  for (const l of graphLinks) {
+    const a = l.source, b = l.target;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const d = Math.sqrt(dx*dx + dy*dy) || 0.01;
+    const f = (d - REST) * ATTRACT;
+    const fx = (dx / d) * f;
+    const fy = (dy / d) * f;
+    a.vx += fx; a.vy += fy;
+    b.vx -= fx; b.vy -= fy;
+  }
+  // center gravity
+  for (const n of graphNodes) {
+    n.vx -= n.x * CENTER_GRAV;
+    n.vy -= n.y * CENTER_GRAV;
+  }
+  // integrate
+  for (const n of graphNodes) {
+    if (graphDrag && graphDrag.node.id === n.id) {
+      n.vx = 0; n.vy = 0; continue;
+    }
+    n.vx *= DAMP; n.vy *= DAMP;
+    n.x += n.vx; n.y += n.vy;
+  }
+  // drag follows mouse
+  if (graphDrag) {
+    const w = screenToWorld(graphDrag.x, graphDrag.y);
+    graphDrag.node.x = w.x;
+    graphDrag.node.y = w.y;
+    graphDrag.node.vx = 0; graphDrag.node.vy = 0;
+  }
+}
+
+function drawGraph() {
+  const ctx = graphCanvas.getContext('2d');
+  const w = graphCanvasRect.width, h = graphCanvasRect.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.translate(graphTransform.x, graphTransform.y);
+  ctx.scale(graphTransform.scale, graphTransform.scale);
+
+  // determine highlight set
+  let hlNodes = new Set(), hlLinks = new Set();
+  if (graphHover) {
+    hlNodes.add(graphHover.id);
+    for (const l of graphLinks) {
+      if (l.source.id === graphHover.id) { hlNodes.add(l.target.id); hlLinks.add(l); }
+      if (l.target.id === graphHover.id) { hlNodes.add(l.source.id); hlLinks.add(l); }
+    }
+  }
+
+  // edges
+  const dark = !document.documentElement.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') === 'dark';
+  for (const l of graphLinks) {
+    ctx.beginPath();
+    ctx.moveTo(l.source.x, l.source.y);
+    ctx.lineTo(l.target.x, l.target.y);
+    if (hlLinks.has(l)) {
+      ctx.strokeStyle = '#6c8cff';
+      ctx.lineWidth = 2;
+    } else if (graphHover) {
+      ctx.strokeStyle = dark ? 'rgba(80,80,100,0.25)' : 'rgba(100,100,120,0.25)';
+      ctx.lineWidth = 1;
+    } else {
+      ctx.strokeStyle = dark ? 'rgba(130,130,150,0.45)' : 'rgba(90,90,110,0.5)';
+      ctx.lineWidth = 1;
+    }
+    ctx.stroke();
+  }
+
+  // nodes
+  for (const n of graphNodes) {
+    const isHover = graphHover && n.id === graphHover.id;
+    const isHl = graphHover && hlNodes.has(n.id);
+    let fill = dark ? '#6c8cff' : '#2a5db0';
+    let stroke = dark ? '#25252b' : '#ffffff';
+    let alpha = 1;
+    if (graphHover) {
+      if (isHl) { fill = isHover ? '#ff6c8c' : '#6cffb0'; }
+      else { alpha = 0.25; }
+    }
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+
+    // label
+    if (isHl || !graphHover || n.radius > 10) {
+      ctx.fillStyle = dark ? '#e0e0e6' : '#1e1e22';
+      ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(n.title, n.x, n.y + n.radius + 3);
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // info overlay
+  ctx.fillStyle = dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
+
+  // hover label in screen coordinates
+  if (graphHover) {
+    ctx.save();
+    ctx.fillStyle = dark ? 'rgba(30,30,34,0.9)' : 'rgba(255,255,255,0.95)';
+    ctx.strokeStyle = dark ? '#6c8cff' : '#2a5db0';
+    ctx.lineWidth = 1;
+    const txt = graphHover.title;
+    ctx.font = 'bold 12px ' + getComputedStyle(document.body).fontFamily;
+    const tw = ctx.measureText(txt).width + 12;
+    const lx = graphMouse.x + 14, ly = graphMouse.y + 14;
+    ctx.fillRect(lx, ly, tw, 22);
+    ctx.strokeRect(lx, ly, tw, 22);
+    ctx.fillStyle = dark ? '#fff' : '#1e1e22';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(txt, lx + 6, ly + 11);
+    ctx.restore();
+  }
+}
+function loopGraph() {
+  tickGraph();
+  drawGraph();
+  graphAnimId = requestAnimationFrame(loopGraph);
+}
+
+graphCanvas.addEventListener('mousedown', (e) => {
+  const rect = graphCanvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  const w = screenToWorld(sx, sy);
+  // pick node
+  let picked = null;
+  for (let i = graphNodes.length - 1; i >= 0; i--) {
+    const n = graphNodes[i];
+    const dx = n.x - w.x, dy = n.y - w.y;
+    if (dx*dx + dy*dy <= (n.radius + 3) * (n.radius + 3)) { picked = n; break; }
+  }
+  if (picked) {
+    graphDrag = { node: picked, x: e.clientX - rect.left, y: e.clientY - rect.top, moved: false };
+  } else {
+    graphPan = { sx: e.clientX - rect.left, sy: e.clientY - rect.top, ox: graphTransform.x, oy: graphTransform.y, moved: false };
+  }
+});
+graphCanvas.addEventListener('mousemove', (e) => {
+  const rect = graphCanvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  graphMouse.x = sx; graphMouse.y = sy;
+  if (graphDrag) {
+    graphDrag.x = sx; graphDrag.y = sy;
+    graphDrag.moved = true;
+  } else if (graphPan) {
+    graphTransform.x = graphPan.ox + (sx - graphPan.sx);
+    graphTransform.y = graphPan.oy + (sy - graphPan.sy);
+    graphPan.moved = true;
+  } else {
+    const w = screenToWorld(sx, sy);
+    let picked = null;
+    for (let i = graphNodes.length - 1; i >= 0; i--) {
+      const n = graphNodes[i];
+      const dx = n.x - w.x, dy = n.y - w.y;
+      if (dx*dx + dy*dy <= (n.radius + 2) * (n.radius + 2)) { picked = n; break; }
+    }
+    graphHover = picked;
+    graphCanvas.style.cursor = picked ? 'pointer' : 'grab';
+  }
+});
+graphCanvas.addEventListener('mouseup', (e) => {
+  const rect = graphCanvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  if (graphDrag) {
+    if (!graphDrag.moved || Math.abs(sx - graphDrag.x) < 2 && Math.abs(sy - graphDrag.y) < 2) {
+      // treat as click
+    }
+    graphDrag = null;
+  } else if (graphPan) {
+    graphPan = null;
+  }
+});
+graphCanvas.addEventListener('dblclick', (e) => {
+  const rect = graphCanvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  const w = screenToWorld(sx, sy);
+  for (const n of graphNodes) {
+    const dx = n.x - w.x, dy = n.y - w.y;
+    if (dx*dx + dy*dy <= (n.radius + 4) * (n.radius + 4)) {
+      state.showGraph = false;
+      document.getElementById('btn-graph').classList.remove('active');
+      openNote(n.id);
+      return;
+    }
+  }
+});
+graphCanvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = graphCanvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  const delta = e.deltaY < 0 ? 1.1 : 0.9;
+  const before = screenToWorld(sx, sy);
+  graphTransform.scale *= delta;
+  graphTransform.scale = Math.max(0.2, Math.min(4, graphTransform.scale));
+  const afterX = before.x * graphTransform.scale + graphTransform.x;
+  const afterY = before.y * graphTransform.scale + graphTransform.y;
+  graphTransform.x += sx - afterX;
+  graphTransform.y += sy - afterY;
+}, { passive: false });
+
+// ---------- Init ----------
+function init() {
+  loadSession();
+  setMode('source');
+  renderTree();
+  renderTabs();
+  renderEditor();
+  renderBacklinks();
+  if (state.activeId) loadActiveToEditor();
+}
+init();
+</script>
+</body>
+</html>

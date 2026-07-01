@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Obsidian</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body data-theme="{{ theme }}">
+<div class="app">
+  <div class="topbar">
+    <div class="toolbar-left">
+      <button class="tbtn" id="btn-new-note" title="Новая заметка (Ctrl+N)">＋ Заметка</button>
+      <button class="tbtn" id="btn-new-folder" title="Новая папка">＋ Папка</button>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div class="toolbar-right">
+      <button class="tbtn" id="btn-mode-source" title="Исходник">Source</button>
+      <button class="tbtn" id="btn-mode-live" title="Живое превью">Live</button>
+      <button class="tbtn" id="btn-mode-preview" title="Превью">Preview</button>
+      <button class="tbtn" id="btn-graph" title="Граф (Ctrl+G)">◉ Граф</button>
+      <button class="tbtn" id="btn-export" title="Экспорт архива (.zip)">⬇ Экспорт</button>
+      <button class="tbtn" id="btn-import" title="Импорт архива (.zip)">⬆ Импорт</button>
+      <input type="file" id="file-import" accept=".zip" style="display:none;" />
+      <button class="tbtn" id="btn-theme" title="Тема">◐</button>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="side-header">
+      <span>Файлы</span>
+      <span class="add" id="btn-add-root" title="Создать в корне">+</span>
+    </div>
+    <div class="tree" id="tree"></div>
+    <div class="side-header" style="border-top:1px solid var(--border); border-bottom:none; padding: 8px 12px; font-size:11px;">
+      <span id="stats"></span>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <div class="editor-wrap" id="editor-wrap" style="display:none;">
+      <div class="editor-area" id="editor-area">
+        <textarea id="editor" spellcheck="false"></textarea>
+        <div id="preview"></div>
+        <div class="suggest" id="suggest" style="display:none;"></div>
+      </div>
+      <div class="backlinks" id="backlinks"></div>
+    </div>
+    <canvas id="graph-canvas" style="display:none;"></canvas>
+    <div class="welcome" id="welcome">
+      <h1>⚡ Second Brain</h1>
+      <p>Создайте первую заметку или откройте существующую из дерева слева.</p>
+      <p style="font-size:12px; margin-top:20px;">
+        <kbd>Ctrl+N</kbd> новая заметка · <kbd>Ctrl+S</kbd> сохранить ·
+        <kbd>Ctrl+E</kbd> режим · <kbd>Ctrl+G</kbd> граф
+      </p>
+      <p style="font-size:11px;">Связывайте заметки через <code>[[Имя заметки]]</code></p>
+    </div>
+  </div>
+</div>
+
+<div class="ctxmenu" id="ctxmenu" style="display:none;"></div>
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Создать</h3>
+    <input type="text" id="modal-input" placeholder="Название..." />
+    <div class="actions">
+      <button class="cancel" id="modal-cancel">Отмена</button>
+      <button class="ok" id="modal-ok">ОК</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+  window.__CFG__ = {
+    hotkeys: {{ hotkeys|tojson }},
+    theme: {{ theme|tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
